@@ -8,7 +8,7 @@ CORS(app)  # Enable CORS for all routes
 # In-memory storage for captured Pokémon
 captured_pokemon = set()
 
-@app.route('/icon/<name>')
+@app.route('/api/icon/<name>')
 def get_icon_url(name: str):
     return f"https://img.pokemondb.net/sprites/silver/normal/{name}.png"
 
@@ -20,6 +20,7 @@ def get_pokemon():
     sort_by = request.args.get('sortBy', default='number', type=str)
     sort_order = request.args.get('sortOrder', default='asc', type=str)
     filter_type = request.args.get('type', default=None, type=str)
+    search_query = request.args.get('search', default=None, type=str)
     
     # Get all Pokémon data
     all_data = db.get()
@@ -30,6 +31,18 @@ def get_pokemon():
     else:
         filtered_data = all_data
     
+    if search_query and search_query.strip():
+        search_query = search_query.lower().strip()
+        search_filtered = []
+        for pokemon in filtered_data:
+            # Search in multiple fields
+            if (search_query in pokemon['name'].lower() or
+                search_query in str(pokemon['number']) or
+                (pokemon['type_one'] and search_query in pokemon['type_one'].lower()) or
+                (pokemon['type_two'] and search_query in pokemon['type_two'].lower())):
+                search_filtered.append(pokemon)
+        filtered_data = search_filtered
+
     # Apply sorting
     reverse_order = sort_order.lower() == 'desc'
     sorted_data = sorted(filtered_data, key=lambda x: x[sort_by], reverse=reverse_order)
