@@ -149,7 +149,8 @@ const PokemonList: React.FC = () => {
 
     const handleSearchChange = (query: string) => {
         setSearchQuery(query);
-        // Will reset to page 1 when debounced search query changes
+        // Always reset to page 1 when searching
+        setPage(1);
     };
 
     const handleSortChange = (field: SortField, order: SortOrder) => {
@@ -243,7 +244,7 @@ const PokemonList: React.FC = () => {
                     {pageLoading ? (
                         <div className="page-loading-overlay">
                             <div className="loading-spinner"></div>
-                            <p>Loading page {page}...</p>
+                            <p>Loading...</p>
                         </div>
                     ) : (
                         <div>
