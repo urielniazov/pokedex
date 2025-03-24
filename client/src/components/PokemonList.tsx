@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { PokemonResponse, SortField, SortOrder, FilterOptions } from '../types';
 import { PokemonAPI } from '../api';
 import PokemonCard from './PokemonCard';
 import Pagination, { PageSizeSelector } from './Pagination';
 import { useTheme } from '../ThemeContext';
+import { useSearchParams } from 'react-router-dom';
 
 // SortingSelector component
 const SortingSelector: React.FC<{
@@ -133,45 +134,108 @@ const ThemeToggle: React.FC = () => {
 
 // Main PokemonList component
 const PokemonList: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  
   // State for Pokemon data
   const [pokemonData, setPokemonData] = useState<PokemonResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [pageLoading, setPageLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
-  // State for pagination
-  const [page, setPage] = useState<number>(() => {
-    const storedPage = localStorage.getItem('currentPage');
-    return storedPage ? parseInt(storedPage) : 1;
-  });
+  // Get state from URL parameters or defaults
+  const getPage = (): number => {
+    const page = searchParams.get('page');
+    return page ? parseInt(page) : 1;
+  };
   
-  const [pageSize, setPageSize] = useState<number>(() => {
-    const storedPageSize = localStorage.getItem('pageSize');
-    return storedPageSize ? parseInt(storedPageSize) : 10;
-  });
+  const getPageSize = (): number => {
+    const pageSize = searchParams.get('pageSize');
+    return pageSize ? parseInt(pageSize) : 10;
+  };
   
-  // State for sorting
-  const [sortBy, setSortBy] = useState<SortField>('number');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const getSortBy = (): SortField => {
+    const sortBy = searchParams.get('sortBy') as SortField | null;
+    return sortBy || 'number';
+  };
   
-  // State for filtering
+  const getSortOrder = (): SortOrder => {
+    const sortOrder = searchParams.get('sortOrder') as SortOrder | null;
+    return sortOrder || 'asc';
+  };
+  
+  const getSelectedType = (): string | undefined => {
+    const type = searchParams.get('type');
+    return type || undefined;
+  };
+  
+  const getSearchQuery = (): string => {
+    const search = searchParams.get('search');
+    return search || '';
+  };
+  
+  // State for pagination - Initialize only once from URL
+  const [page, setPage] = useState<number>(() => getPage());
+  const [pageSize, setPageSize] = useState<number>(() => getPageSize());
+  
+  // State for sorting - Initialize only once from URL
+  const [sortBy, setSortBy] = useState<SortField>(() => getSortBy());
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => getSortOrder());
+  
+  // State for filtering - Initialize only once from URL
   const [pokemonTypes, setPokemonTypes] = useState<string[]>([]);
-  const [selectedType, setSelectedType] = useState<string | undefined>(undefined);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedType, setSelectedType] = useState<string | undefined>(() => getSelectedType());
+  const [searchQuery, setSearchQuery] = useState<string>(() => getSearchQuery());
   const [isSearching, setIsSearching] = useState<boolean>(false);
   
   // Debounced search query with useCallback
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>(() => getSearchQuery());
   
-  // Save page to localStorage
-  useEffect(() => {
-    localStorage.setItem('currentPage', page.toString());
-  }, [page]);
   
-  // Save pageSize to localStorage
+  // Update component state from URL params when URL changes
   useEffect(() => {
-    localStorage.setItem('pageSize', pageSize.toString());
-  }, [pageSize]);
+    const newPage = getPage();
+    const newPageSize = getPageSize();
+    const newSortBy = getSortBy();
+    const newSortOrder = getSortOrder();
+    const newSelectedType = getSelectedType();
+    const newSearchQuery = getSearchQuery();
+    
+    // Only update state if values are different to prevent infinite loops
+    if (page !== newPage) setPage(newPage);
+    if (pageSize !== newPageSize) setPageSize(newPageSize);
+    if (sortBy !== newSortBy) setSortBy(newSortBy);
+    if (sortOrder !== newSortOrder) setSortOrder(newSortOrder);
+    if (selectedType !== newSelectedType) setSelectedType(newSelectedType);
+    if (searchQuery !== newSearchQuery) {
+      setSearchQuery(newSearchQuery);
+      setDebouncedSearchQuery(newSearchQuery);
+    }
+  }, [searchParams]);
+  
+  // Add cache for previous URL params to prevent unnecessary updates
+  const urlParamsRef = React.useRef<string>('');
+  
+  // Update URL parameters when state changes
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    
+    // Only add parameters that differ from defaults
+    if (page !== 1) params.page = page.toString();
+    if (pageSize !== 10) params.pageSize = pageSize.toString();
+    if (sortBy !== 'number') params.sortBy = sortBy;
+    if (sortOrder !== 'asc') params.sortOrder = sortOrder;
+    if (selectedType) params.type = selectedType;
+    if (searchQuery) params.search = searchQuery;
+    
+    // Convert current params to a string for comparison
+    const paramsString = JSON.stringify(params);
+    
+    // Only update URL if params have changed
+    if (paramsString !== urlParamsRef.current) {
+      urlParamsRef.current = paramsString;
+      setSearchParams(params);
+    }
+  }, [page, pageSize, sortBy, sortOrder, selectedType, searchQuery, setSearchParams]);
   
   // Effect to fetch Pokemon types
   useEffect(() => {
@@ -263,57 +327,35 @@ const PokemonList: React.FC = () => {
     };
   }, [page, pageSize, sortBy, sortOrder, selectedType, debouncedSearchQuery]);
   
-  // Reset to page 1 when filters or page size change
-  useEffect(() => {
-    setPage(1);
-  }, [selectedType, debouncedSearchQuery, pageSize]);
-  
-  // Handler for toggling captured status
-  const handleToggleCapture = async (name: string, captured: boolean) => {
-    try {
-      if (captured) {
-        await PokemonAPI.capturePokemon(name);
-      } else {
-        await PokemonAPI.releasePokemon(name);
-      }
-      
-      // Update local state
-      if (pokemonData) {
-        setPokemonData({
-          ...pokemonData,
-          pokemon: pokemonData.pokemon.map(p => 
-            p.name === name ? { ...p, captured } : p
-          )
-        });
-      }
-    } catch (error) {
-      console.error('Error toggling capture status:', error);
-    }
-  };
-  
-  // Handlers for various user actions
+  // Handler for page change
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
   };
   
-  const handlePageSizeChange = (newSize: number) => {
-    setPageSize(newSize);
+  // Handle filter, sort, or search changes - explicitly reset to page 1
+  const handleTypeChange = (type: string | undefined) => {
+    setSelectedType(type);
+    // Reset to page 1 when filter changes
+    setPage(1);
+  };
+  
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    // Will reset to page 1 when debounced search query changes
   };
   
   const handleSortChange = (field: SortField, order: SortOrder) => {
     setSortBy(field);
     setSortOrder(order);
+    // Reset to page 1 when sort changes
+    setPage(1);
   };
   
-  const handleTypeChange = (type: string | undefined) => {
-    setSelectedType(type);
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    // Reset to page 1 when page size changes
+    setPage(1);
   };
-  
-  const handleSearchChange = (query: string) => {
-    setSearchQuery(query);
-  };
-  
-  // Removed infinite scroll
   
   // Render loading state
   if (loading && !pokemonData) {
@@ -364,11 +406,10 @@ const PokemonList: React.FC = () => {
           {pageLoading ? (
             <div className="page-loading-overlay">
               <div className="loading-spinner"></div>
-              <p>Loading...</p>
+              <p>Loading page {page}...</p>
             </div>
           ) : (
-            <div>
-                <div className="pokemon-list">
+            <div className="pokemon-list">
               {pokemonData.pokemon.length > 0 ? (
                 pokemonData.pokemon.map((pokemon) => (
                   <PokemonCard 
@@ -387,20 +428,40 @@ const PokemonList: React.FC = () => {
                 </div>
               )}
             </div>
-                <Pagination 
+          )}
+          
+          <Pagination 
             currentPage={page}
             totalPages={pokemonData.totalPages}
             onPageChange={handlePageChange}
           />
-            </div>
-            
-            
-          )}
-          
         </>
       )}
     </div>
   );
+  
+  // Handler for toggling captured status
+  async function handleToggleCapture(name: string, captured: boolean) {
+    try {
+      if (captured) {
+        await PokemonAPI.capturePokemon(name);
+      } else {
+        await PokemonAPI.releasePokemon(name);
+      }
+      
+      // Update local state
+      if (pokemonData) {
+        setPokemonData({
+          ...pokemonData,
+          pokemon: pokemonData.pokemon.map(p => 
+            p.name === name ? { ...p, captured } : p
+          )
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling capture status:', error);
+    }
+  }
 };
 
 export default PokemonList;
