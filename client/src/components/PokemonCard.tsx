@@ -20,7 +20,7 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onToggleCapture }) =
     const fetchImageUrl = async () => {
       setIsImageLoading(true);
       try {
-        const url = await PokemonAPI.getPokemonIconUrl(pokemon.name);
+        const url = await PokemonAPI.getPokemonIconUrl(pokemon.name, pokemon.generation);
         if (isMounted) {
           setImageUrl(url);
         }

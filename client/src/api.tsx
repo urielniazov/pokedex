@@ -102,9 +102,9 @@ export const PokemonAPI = {
     }
   },
   
-  getPokemonIconUrl: async (name: string): Promise<string> => {
+  getPokemonIconUrl: async (name: string, generation: number): Promise<string> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/icon/${name.toLowerCase()}`);
+      const response = await fetch(`${API_BASE_URL}/icon?name=${name.toLowerCase()}&generation=${generation}`);
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);

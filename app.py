@@ -8,9 +8,13 @@ CORS(app)  # Enable CORS for all routes
 # In-memory storage for captured Pokémon
 captured_pokemon = set()
 
-@app.route('/api/icon/<name>')
-def get_icon_url(name: str):
-    return f"https://img.pokemondb.net/sprites/silver/normal/{name}.png"
+@app.route('/api/icon')
+def get_icon_url():
+    name = request.args.get('name', default=None, type=str)
+    generation = request.args.get('generation', default=1, type=int)
+    if generation < 5:
+        return f"https://img.pokemondb.net/sprites/silver/normal/{name}.png"
+    return f"https://img.pokemondb.net/sprites/x-y/normal/{name}.png"
 
 @app.route('/api/pokemon')
 def get_pokemon():
