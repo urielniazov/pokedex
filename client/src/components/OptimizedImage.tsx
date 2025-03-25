@@ -1,5 +1,6 @@
 // components/OptimizedImage.tsx
 import React, { useState } from 'react';
+import './OptimizedImage.css';
 
 interface OptimizedImageProps {
   src: string;
